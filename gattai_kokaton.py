@@ -21,9 +21,18 @@ RESTITUTION = 0.3  # 反発係数（0〜1）
 FPS = 60
 
 BALL_RADIUS = 12
-BALL_IMAGE_PATH = "fig/0.png"
+BALL_IMAGE_PATH0 = pg.image.load("fig/0.png")
+BALL_IMAGE_PATH1 = pg.image.load("fig/1.png")
+BALL_IMAGE_PATH2 = pg.image.load("fig/2.png")
+BALL_IMAGE_PATH3 = pg.image.load("fig/3.png")
+BALL_IMAGE_PATH4 = pg.image.load("fig/4.png")
+BALL_IMAGE_PATH5 = pg.image.load("fig/5.png")
+BALL_IMAGE_PATH6 = pg.image.load("fig/6.png")
+BALL_IMAGE_PATH7 = pg.image.load("fig/7.png")
+BALL_IMAGE_PATH8 = pg.image.load("fig/8.png")
+BALL_IMAGE_PATH9 = pg.image.load("fig/9.png")
 
-
+BALL_IMAGE = [BALL_IMAGE_PATH0,BALL_IMAGE_PATH1,BALL_IMAGE_PATH2,BALL_IMAGE_PATH3,BALL_IMAGE_PATH4,BALL_IMAGE_PATH5,BALL_IMAGE_PATH6,BALL_IMAGE_PATH7,BALL_IMAGE_PATH8,BALL_IMAGE_PATH9]
 class Ball:
     """落ちてくる小さい球（画像で表示）"""
 
@@ -34,6 +43,7 @@ class Ball:
         self.falling = False  # Enterキーが押されるまでは静止
         size = BALL_RADIUS * 2
         self.image = pg.transform.smoothscale(image, (size, size))
+        self.num = 0
 
     def update_physics(self):
         if not self.falling:
@@ -53,6 +63,38 @@ class Ball:
         rect = self.image.get_rect(center=(int(self.x), int(self.y)))
         screen.blit(self.image, rect)
 
+def set_ball_image(ball: Ball, num: int):
+    """サイズを整える"""
+    size = BALL_RADIUS * 2
+    ball.num = num
+    ball.image = pg.transform.smoothscale(
+        BALL_IMAGE[num].convert_alpha(),
+        (size, size)
+    )
+
+def merge(a: Ball, b: Ball)->bool:
+    """こうかとんの画像が同じならばaとbを合体する"""
+
+    dx = b.x - a.x
+    dy = b.y - a.y
+    dist = math.hypot(dx, dy)
+    min_dist = BALL_RADIUS * 2
+
+    # ぶつかっていないなら合体しない
+    if dist == 0 or dist >= min_dist:
+        return False
+
+    # 同じ画像番号でなければ合体しない
+    if a.num != b.num:
+        return False
+
+    # 最後の画像なら、それ以上進化しない
+    if a.num >= len(BALL_IMAGE) - 1:
+        return False
+
+    set_ball_image(a, a.num + 1)
+    return True
+
 
 def resolve_ball_collision(a: Ball, b: Ball):
     """2つの球が重なっていたら押し戻し、簡易的に弾き合う"""
@@ -63,7 +105,7 @@ def resolve_ball_collision(a: Ball, b: Ball):
 
     if dist == 0 or dist >= min_dist:
         return
-
+        
     overlap = min_dist - dist
     nx, ny = dx / dist, dy / dist
 
@@ -87,7 +129,7 @@ class Game:
         self.screen = pg.display.set_mode((WIDTH, HEIGHT))
         self.clock = pg.time.Clock()
 
-        self.ball_image = pg.image.load(BALL_IMAGE_PATH).convert_alpha()
+        self.ball_image = BALL_IMAGE_PATH0.convert_alpha()
 
         self.balls: list[Ball] = []
         self.current_ball = Ball(WIDTH // 2, GAME_OVER_LINE_Y, self.ball_image)
@@ -110,17 +152,24 @@ class Game:
         for ball in self.balls:
             ball.update_physics()
 
+
         # 全ペアの衝突判定
-        for i in range(len(self.balls)):
-            for j in range(i + 1, len(self.balls)):
-                resolve_ball_collision(self.balls[i], self.balls[j])
+        i = 0
+        while i < len(self.balls):
+            j = i + 1
+            while j < len(self.balls):
+                if merge(self.balls[i], self.balls[j]): #同じ画像が衝突しているかどうか。戻り値->bool
+                    del self.balls[j]
+                    continue 
+                resolve_ball_collision(self.balls[i], self.balls[j]) #衝突判定。衝突していたら反発
+                j += 1
+            i += 1
 
     def draw(self):
         self.screen.fill((250, 240, 210))
 
         # ゲームオーバーライン
-        pg.draw.line(self.screen, (255, 0, 0), (WALL_MARGIN, GAME_OVER_LINE_Y),
-                     (WIDTH - WALL_MARGIN, GAME_OVER_LINE_Y), 2)
+        pg.draw.line(self.screen, (255, 0, 0), (WALL_MARGIN, GAME_OVER_LINE_Y),(WIDTH - WALL_MARGIN, GAME_OVER_LINE_Y), 2)
 
         # 壁と床
         pg.draw.line(self.screen, (100, 60, 30), (WALL_MARGIN, 0), (WALL_MARGIN, FLOOR_Y), 4)
