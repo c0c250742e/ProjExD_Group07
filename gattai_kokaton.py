@@ -10,7 +10,6 @@ import math
 import random  # ランダム選択のために追加
 import time
 import pygame as pg
-
 os.chdir(os.path.dirname(os.path.abspath(__file__)))
 
 WIDTH, HEIGHT = 600, 800
@@ -20,7 +19,6 @@ GAME_OVER_LINE_Y = 120  # このラインを超えて積み上がったらゲー
 GRAVITY = 0.5
 RESTITUTION = 0.3  # 反発係数（0〜1）
 FPS = 60
-
 BALL_RADIUS = 12
 # 複数のこうかとん画像に対応するためリストに格納
 BALL_IMAGE_PATHS = [
@@ -40,13 +38,26 @@ BALL_IMAGE_PATH8 = pg.image.load("fig/8.png")
 BALL_IMAGE_PATH9 = pg.image.load("fig/9.png")
 
 BALL_IMAGE = [BALL_IMAGE_PATH0,BALL_IMAGE_PATH1,BALL_IMAGE_PATH2,BALL_IMAGE_PATH3,BALL_IMAGE_PATH4,BALL_IMAGE_PATH5,BALL_IMAGE_PATH6,BALL_IMAGE_PATH7,BALL_IMAGE_PATH8,BALL_IMAGE_PATH9]
+
+class Score:  # 実装Score
+    def __init__(self):
+        self.font = pg.font.Font(None, 50)
+        self.color = (0, 0, 255)
+        self.value = 0
+        self.image = self.font.render(f"Score: {self.value}", 0, self.color)
+        self.rect = self.image.get_rect()
+        self.rect.center = 100, HEIGHT-750
+
+    def update(self, screen: pg.Surface):
+        self.image = self.font.render(f"Score: {self.value}", 0, self.color)
+        screen.blit(self.image, self.rect)
 class Ball:
     """落ちてくる小さい球（画像で表示）"""
     delta = {
         pg.K_a:(-7,0),
         pg.K_d:(+7,0),
     }
-    def __init__(self, x: float, y: float, num: int, image: pg.Surface):
+    def __init__(self, x: float, y: float, num: int, image: pg.Surface, ball_type: int = 0):
         self.x = x
         self.y = y
         self.vx = 0.0
@@ -64,11 +75,9 @@ class Ball:
     def update_physics(self):
         if not self.falling:
             return
-
         self.vy += GRAVITY
         self.x += self.vx
         self.y += self.vy
-
         # 壁との衝突
         if self.x - self.radius < WALL_MARGIN:
             self.x = (WALL_MARGIN+ self.radius)
@@ -123,7 +132,7 @@ def set_ball_image(ball: Ball, num: int):
         (size, size)
     )
 
-def merge(a: Ball, b: Ball)->bool:
+def merge(a: Ball, b: Ball, score: Score, hit_sound: pg.mixer.Sound, sound_type8: pg.mixer.Sound)->bool:
     """こうかとんの画像が同じならばaとbを合体する"""
 
     dx = b.x - a.x
@@ -143,9 +152,33 @@ def merge(a: Ball, b: Ball)->bool:
     if a.num >= len(BALL_IMAGE) - 1:
         return False
 
+    # === 【修正点】合体が成功したタイミングでスコア加算とSE再生を行う ===
+    ball_type = a.num  # a.num（0〜9の数値）を使用
+    hit_sound.play()   # 通常の合体音を鳴らす
+    
+    if ball_type == 0:
+        score.value += 1   # 種類0なら1点
+    elif ball_type == 1:
+        score.value += 5   # 種類1なら5点
+    elif ball_type == 2:
+        score.value += 10  # 種類2なら10点
+    elif ball_type == 3:
+        score.value += 20  # 種類3なら20点
+    elif ball_type == 4:
+        score.value += 30  # 種類4なら30点
+    elif ball_type == 5:
+        score.value += 40  # 種類5なら40点
+    elif ball_type == 6:
+        score.value += 50  # 種類6なら50点
+    elif ball_type == 7:
+        score.value += 60  # 種類7なら60点
+    elif ball_type == 8:
+        score.value += 100 # 種類8なら100点
+        sound_type8.play() # 種類8同士の専用サウンド
+    # =================================================================
+
     set_ball_image(a, a.num + 1)
     return True
-
 
 def resolve_ball_collision(a: Ball, b: Ball):
     """2つの球が重なっていたら押し戻し、簡易的に弾き合う"""
@@ -159,23 +192,26 @@ def resolve_ball_collision(a: Ball, b: Ball):
         
     overlap = min_dist - dist
     nx, ny = dx / dist, dy / dist
-
     # 重なりを均等に押し戻す
     a.x -= nx * overlap / 2
     a.y -= ny * overlap / 2
     b.x += nx * overlap / 2
     b.y += ny * overlap / 2
-
     # 簡易的な反発（速度を軽く交換して弾く）
     a.vy -= ny * 1.5
     b.vy += ny * 1.5
 
 
 class Game:
-    """ゲーム全体の進行を管理するクラス（現状は背景描画のみ）"""
-
+    """ゲーム全体の進行を管理するクラス"""
     def __init__(self):
         pg.init()
+        pg.mixer.init()  # 実装Sound
+        pg.mixer.music.load("ゆったりお散歩2.mp3")  
+        pg.mixer.music.set_volume(0.5)
+        pg.mixer.music.play(-1)
+        self.hit_sound = pg.mixer.Sound("決定ボタンを押す52.wav")  # 実装Sound
+        self.sound_type8 = pg.mixer.Sound("金額表示.wav")  # 実装Sound
         self.over_start = None #ゲームオーバー判定が始まった時刻を記録
         self.start = True
         self.game_over = False
@@ -187,8 +223,12 @@ class Game:
             pg.image.load(path).convert_alpha() for path in BALL_IMAGE_PATHS
         ]
         self.balls: list[Ball] = []
+        #  次に作成するボールの種類を管理する変数（最初は種類 0）
+        self.next_ball_type = 0
+        # 画像(第3引数)と種類ID(第4引数)を連動させる
         rand_num = random.randint(0, 4) # 先に0~4の番号をランダム決定
-        self.current_ball = Ball(WIDTH // 2, GAME_OVER_LINE_Y, rand_num, self.ball_images[rand_num])
+        self.current_ball = Ball(WIDTH // 2, GAME_OVER_LINE_Y, rand_num, self.ball_images[self.next_ball_type], self.next_ball_type)
+        self.score = Score()
 
     def handle_events(self):
         for event in pg.event.get():
@@ -230,16 +270,16 @@ class Game:
                         pg.quit()
                         sys.exit()
 
-
-        # 全ペアの衝突判定
         i = 0
-        while i < len(self.balls):
+        while i < len(self.balls):  
             j = i + 1
             while j < len(self.balls):
-                if merge(self.balls[i], self.balls[j]): #同じ画像が衝突しているかどうか。戻り値->bool
+                # 【変更】引数にスコアと効果音のオブジェクトを追加
+                if merge(self.balls[i], self.balls[j], self.score, self.hit_sound, self.sound_type8): 
                     del self.balls[j]
                     continue 
-                resolve_ball_collision(self.balls[i], self.balls[j]) #衝突判定。衝突していたら反発
+                # 【変更】位置の押し戻しだけを行うシンプルな呼び出しに変更
+                resolve_ball_collision(self.balls[i], self.balls[j]) 
                 j += 1
             i += 1
 
@@ -261,11 +301,10 @@ class Game:
         pg.draw.line(self.screen, (100, 60, 30), (WALL_MARGIN, 0), (WALL_MARGIN, FLOOR_Y), 4)
         pg.draw.line(self.screen, (100, 60, 30), (WIDTH - WALL_MARGIN, 0), (WIDTH - WALL_MARGIN, FLOOR_Y), 4)
         pg.draw.line(self.screen, (100, 60, 30), (WALL_MARGIN, FLOOR_Y), (WIDTH - WALL_MARGIN, FLOOR_Y), 4)
-
         for ball in self.balls:
             ball.draw(pg.key.get_pressed(), self.screen)
         self.current_ball.draw(pg.key.get_pressed(),self.screen)
-
+        self.score.update(self.screen)
         pg.display.flip()
 
     def run(self):
@@ -274,7 +313,6 @@ class Game:
             self.update()
             self.draw()
             self.clock.tick(FPS)
-
-
+            
 if __name__ == "__main__":
     Game().run()
