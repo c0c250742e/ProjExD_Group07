@@ -147,12 +147,6 @@ def merge(a: Ball, b: Ball, score: Score, hit_sound: pg.mixer.Sound, sound_type8
     # 同じ画像番号でなければ合体しない
     if a.num != b.num:
         return False
-
-    # 最後の画像なら、それ以上進化しない
-    if a.num >= len(BALL_IMAGE) - 1:
-        return False
-
-    # === 【修正点】合体が成功したタイミングでスコア加算とSE再生を行う ===
     ball_type = a.num  # a.num（0〜9の数値）を使用
     hit_sound.play()   # 通常の合体音を鳴らす
     
@@ -174,11 +168,18 @@ def merge(a: Ball, b: Ball, score: Score, hit_sound: pg.mixer.Sound, sound_type8
         score.value += 60  # 種類7なら60点
     elif ball_type == 8:
         score.value += 100 # 種類8なら100点
+    elif ball_type == 9:
+        score.value += 1000 # 種類9なら1000点
+    
         sound_type8.play() # 種類8同士の専用サウンド
     # =================================================================
+    if a.num >= len(BALL_IMAGE) - 1:
+        score.value += 200  # 最大サイズを消した特別ボーナス
+        sound_type8.play()  # 消える演出として専用サウンドを鳴らす
+        return "disappear"
 
     set_ball_image(a, a.num + 1)
-    return True
+    return "evolve"
 
 def resolve_ball_collision(a: Ball, b: Ball):
     """2つの球が重なっていたら押し戻し、簡易的に弾き合う"""
@@ -232,6 +233,9 @@ class Game:
 
     def handle_events(self):
         for event in pg.event.get():
+            if event.type == pg.QUIT:
+                pg.quit()
+                sys.exit()
             if self.start:
                 if event.type == pg.MOUSEBUTTONDOWN:
                     self.start = False
@@ -273,15 +277,23 @@ class Game:
         i = 0
         while i < len(self.balls):  
             j = i + 1
+            ball_i_removed = False
             while j < len(self.balls):
                 # 【変更】引数にスコアと効果音のオブジェクトを追加
-                if merge(self.balls[i], self.balls[j], self.score, self.hit_sound, self.sound_type8): 
+                result = merge(self.balls[i], self.balls[j], self.score, self.hit_sound, self.sound_type8)
+                if result == "evolve":
                     del self.balls[j]
                     continue 
+                elif result == "disappear":
+                    del self.balls[j]        # ← ここでbを消す
+                    del self.balls[i]        # ← ここでaも消す
+                    ball_i_removed = True
+                    break
                 # 【変更】位置の押し戻しだけを行うシンプルな呼び出しに変更
                 resolve_ball_collision(self.balls[i], self.balls[j]) 
                 j += 1
-            i += 1
+            if not ball_i_removed:
+                i += 1
 
     def draw(self):
         self.screen.fill((250, 240, 210))
