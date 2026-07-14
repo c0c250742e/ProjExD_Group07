@@ -31,16 +31,7 @@ BALL_IMAGE_PATHS = [
 class Ball:
     """落ちてくる小さい球（画像で表示）"""
 
-<<<<<<< HEAD
-    delta = {  # 押下キーと移動量の辞書
-        pg.K_a: (-7, 0),
-        pg.K_d: (+7, 0),
-    }
-
-    def __init__(self, x: float, y: float, image: pg.Surface):
-=======
     def __init__(self, x: float, y: float, num: int, image: pg.Surface):
->>>>>>> random
         self.x = x
         self.y = y
         self.vx = 0.0
@@ -63,7 +54,6 @@ class Ball:
         self.x += self.vx
         self.y += self.vy
 
-<<<<<<< HEAD
         # 壁との衝突
         if self.x - BALL_RADIUS < WALL_MARGIN:
             self.x = WALL_MARGIN + BALL_RADIUS
@@ -75,11 +65,9 @@ class Ball:
         # 床との衝突
         if self.y + BALL_RADIUS > FLOOR_Y:
             self.y = FLOOR_Y - BALL_RADIUS
-=======
         # 床との衝突（BALL_RADIUS だった場所を self.radius に変更）
         if self.y + self.radius > FLOOR_Y:
             self.y = FLOOR_Y - self.radius
->>>>>>> random
             self.vy *= -RESTITUTION
             if abs(self.vy) < 1.0:
                 self.vy = 0.0
@@ -157,15 +145,9 @@ class Game:
     def _drop_ball(self):
         self.current_ball.falling = True
         self.balls.append(self.current_ball)
-<<<<<<< HEAD
-        # 次のボール生成場所を現在のボールのx座標に設定
         next_x = self.current_ball.x
-        self.current_ball = Ball(next_x, GAME_OVER_LINE_Y, self.ball_image)
-=======
-        
         rand_num = random.randint(0, 4) # 次のボールも0~4からランダム決定
-        self.current_ball = Ball(WIDTH // 2, GAME_OVER_LINE_Y, rand_num, self.ball_images[rand_num])
->>>>>>> random
+        self.current_ball = Ball(next_x, GAME_OVER_LINE_Y, rand_num, self.ball_images[rand_num])
 
     def update(self):
         for ball in self.balls:
